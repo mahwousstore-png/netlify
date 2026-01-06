@@ -10,35 +10,35 @@ interface Order {
   id: string;
   total_sales: number;
   total_cost: number;
+  vendor_id: string;
+  employee_id: string;
   created_at: string;
-  // ... تفاصيل أخرى
 }
 
 interface VendorPayment {
   id: string;
   vendor_id: string;
   amount: number;
-  is_deleted: boolean; // مهم لورقة دفتر الأستاذ
+  is_deleted: boolean;
+  created_by?: string;
   created_at: string;
-  // ... تفاصيل أخرى
 }
 
 interface EmployeeBalanceTransaction {
   id: string;
-  employee_id: string;
+  user_id: string;
   amount: number;
-  type: 'deposit' | 'withdrawal' | 'refund';
-  notes: string;
+  type: 'credit' | 'debit';
+  reason?: string;
   created_at: string;
-  // ... تفاصيل أخرى
 }
 
 interface Expense {
   id: string;
   amount: number;
   category: string;
+  description?: string;
   created_at: string;
-  // ... تفاصيل أخرى
 }
 
 interface MasterReportData {
@@ -73,7 +73,7 @@ const fetchMasterReportData = async (supabase: any): Promise<MasterReportData | 
         vendor_id,
         amount,
         created_at,
-        employee_id,
+        created_by,
         is_deleted
       `);
     if (paymentsError) throw paymentsError;
@@ -83,10 +83,10 @@ const fetchMasterReportData = async (supabase: any): Promise<MasterReportData | 
       .from('employee_balance_transactions')
       .select(`
         id,
-        employee_id,
+        user_id,
         amount,
         type,
-        notes,
+        reason,
         created_at
       `);
     if (transactionsError) throw transactionsError;
@@ -244,17 +244,18 @@ const generateEmployeeCustodyAuditSheet = (workbook: ExcelJS.Workbook, data: Mas
   // تجميع المعاملات حسب الموظف
   const employeeBalancesMap = new Map<string, number>();
   data.employeeTransactions.forEach(t => {
-    const currentBalance = employeeBalancesMap.get(t.employee_id) || 0;
-    const amount = t.type === 'deposit' || t.type === 'refund' ? t.amount : -t.amount;
-    employeeBalancesMap.set(t.employee_id, currentBalance + amount);
+    const currentBalance = employeeBalancesMap.get(t.user_id) || 0;
+    // credit adds to balance, debit subtracts from balance
+    const amount = t.type === 'credit' ? t.amount : -t.amount;
+    employeeBalancesMap.set(t.user_id, currentBalance + amount);
 
     // إضافة صف المعاملة
     sheet.addRow({
-      employee_id: t.employee_id,
-      type: t.type === 'deposit' ? 'إيداع' : t.type === 'withdrawal' ? 'سحب' : 'استرداد',
-      amount: formatCurrency(t.amount),
+      employee_id: t.user_id,
+      type: t.type === 'credit' ? 'صرف عهدة' : 'تسوية عهدة',
+      amount: formatCurrency(Math.abs(t.amount)),
       created_at: formatDate(t.created_at),
-      notes: t.notes,
+      notes: t.reason || '-',
     });
   });
 
@@ -351,7 +352,7 @@ const generateExecutiveSummarySheet = (workbook: ExcelJS.Workbook, data: MasterR
   const totalInvoiced = data.orders.reduce((sum, o) => sum + o.total_cost, 0); // افتراض: التكلفة هي الفاتورة
 
   const totalCustodyBalance = data.employeeTransactions.reduce((sum, t) => {
-    return sum + (t.type === 'deposit' || t.type === 'refund' ? t.amount : -t.amount);
+    return sum + (t.type === 'credit' ? t.amount : -t.amount);
   }, 0);
 
   const metrics = [
