@@ -30,6 +30,7 @@ interface EmployeeBalanceTransaction {
   amount: number;
   type: 'credit' | 'debit';
   reason?: string;
+  transaction_date: string;
   created_at: string;
 }
 
@@ -87,6 +88,7 @@ const fetchMasterReportData = async (supabase: any): Promise<MasterReportData | 
         amount,
         type,
         reason,
+        transaction_date,
         created_at
       `);
     if (transactionsError) throw transactionsError;
@@ -254,7 +256,7 @@ const generateEmployeeCustodyAuditSheet = (workbook: ExcelJS.Workbook, data: Mas
       employee_id: t.user_id,
       type: t.type === 'credit' ? 'صرف عهدة' : 'تسوية عهدة',
       amount: formatCurrency(Math.abs(t.amount)),
-      created_at: formatDate(t.created_at),
+      created_at: formatDate(t.transaction_date || t.created_at),
       notes: t.reason || '-',
     });
   });
