@@ -181,9 +181,7 @@ export const MasterReportButton: React.FC = () => {
       ) : (
         <FileSpreadsheet className="h-4 w-4" />
       )}
-      <span>Export Master Report</span>
+      <span>تصدير التقرير الشامل</span>
     </button>
   );
 };
-
-export default MasterReportButton;
