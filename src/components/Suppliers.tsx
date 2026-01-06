@@ -16,7 +16,7 @@ import jsPDF from 'jspdf';
 import toast from 'react-hot-toast';
 import Swal from 'sweetalert2';
 import { formatDateTime } from '../lib/dateUtils';
-import MasterReportButton from './MasterReportButton';
+import { MasterReportButton } from './MasterReportButton';
 
 const Suppliers: React.FC = () => {
   const {
