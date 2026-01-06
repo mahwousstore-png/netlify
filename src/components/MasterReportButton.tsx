@@ -14,23 +14,19 @@ export const MasterReportButton: React.FC = () => {
       toast.loading('جاري تجهيز التقرير الشامل...', { id: 'master-report' });
 
       // Fetch data from Supabase
-      const [ordersData, entitiesData, receivablesData, paymentsData, userProfilesData, employeeTransactionsData, expensesData] = await Promise.all([
+      const [ordersData, entitiesData, receivablesData, userProfilesData, employeeTransactionsData] = await Promise.all([
         supabase.from('orders').select('*').order('created_at', { ascending: false }),
         supabase.from('entities').select('*').eq('type', 'مورد').order('name'),
         supabase.from('receivables').select('*'),
-        supabase.from('payments').select('*'),
         supabase.from('user_profiles').select('*').eq('role', 'user').eq('is_active', true).order('full_name'),
-        supabase.from('employee_balance_transactions').select('*').order('transaction_date', { ascending: false }),
-        supabase.from('expenses').select('*').order('created_at', { ascending: false })
+        supabase.from('employee_balance_transactions').select('*').order('transaction_date', { ascending: false })
       ]);
 
       const orders = ordersData.data || [];
       const entities = entitiesData.data || [];
       const receivables = receivablesData.data || [];
-      const payments = paymentsData.data || [];
       const userProfiles = userProfilesData.data || [];
       const employeeTransactions = employeeTransactionsData.data || [];
-      const expenses = expensesData.data || [];
 
       // Create workbook
       const workbook = new ExcelJS.Workbook();
@@ -81,9 +77,18 @@ export const MasterReportButton: React.FC = () => {
       vendorsSheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF10B981' } };
       vendorsSheet.getRow(1).alignment = { horizontal: 'center', vertical: 'middle' };
 
+      // Create lookup map for vendor receivables
+      const receivablesByEntity = new Map<string, any[]>();
+      receivables.forEach((r: any) => {
+        if (!receivablesByEntity.has(r.entity_id)) {
+          receivablesByEntity.set(r.entity_id, []);
+        }
+        receivablesByEntity.get(r.entity_id)!.push(r);
+      });
+
       entities.forEach((entity: any) => {
-        // Calculate vendor totals
-        const vendorReceivables = receivables.filter((r: any) => r.entity_id === entity.id);
+        // Calculate vendor totals using lookup map
+        const vendorReceivables = receivablesByEntity.get(entity.id) || [];
         const totalInvoiced = vendorReceivables.reduce((sum: number, r: any) => sum + parseFloat(r.total_amount || 0), 0);
         const outstanding = vendorReceivables.reduce((sum: number, r: any) => sum + parseFloat(r.remaining_amount || 0), 0);
         const actualPaid = totalInvoiced - outstanding;
@@ -113,8 +118,17 @@ export const MasterReportButton: React.FC = () => {
       custodySheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFBBF24' } };
       custodySheet.getRow(1).alignment = { horizontal: 'center', vertical: 'middle' };
 
+      // Create lookup map for employee transactions
+      const transactionsByUser = new Map<string, any[]>();
+      employeeTransactions.forEach((t: any) => {
+        if (!transactionsByUser.has(t.user_id)) {
+          transactionsByUser.set(t.user_id, []);
+        }
+        transactionsByUser.get(t.user_id)!.push(t);
+      });
+
       userProfiles.forEach((user: any) => {
-        const userTransactions = employeeTransactions.filter((t: any) => t.user_id === user.id);
+        const userTransactions = transactionsByUser.get(user.id) || [];
         const totalIn = userTransactions
           .filter((t: any) => parseFloat(t.amount) > 0)
           .reduce((sum: number, t: any) => sum + parseFloat(t.amount || 0), 0);
